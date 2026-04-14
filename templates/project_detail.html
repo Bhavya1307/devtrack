@@ -1,0 +1,318 @@
+{% extends 'base.html' %}
+{% block title %}{{ project.name }} — DevTrack{% endblock %}
+{% block page_title %}
+<a href="{{ url_for('projects') }}" style="color: var(--text-muted); text-decoration: none;">Projects</a>
+<i class="fa-solid fa-chevron-right" style="font-size: 0.75rem; color: var(--text-muted); margin: 0 0.5rem;"></i>
+{{ project.name }}
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" onclick="openModal('newTaskModal')">
+    <i class="fa-solid fa-plus"></i> Add Task
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Project Overview -->
+<div class="project-overview card">
+    <div class="project-overview-header">
+        <div>
+            <div class="project-overview-badges">
+                <span class="badge badge-{{ project.status.lower().replace(' ', '-') }}">{{ project.status }}</span>
+                <span class="badge badge-priority-{{ project.priority.lower() }}">{{ project.priority }}</span>
+                {% if project.is_overdue %}<span class="badge badge-overdue">Overdue</span>{% endif %}
+            </div>
+            <h2 class="project-overview-title">{{ project.name }}</h2>
+            {% if project.description %}
+            <p class="project-overview-desc">{{ project.description }}</p>
+            {% endif %}
+        </div>
+        <div class="project-overview-actions">
+            <button class="btn btn-outline btn-sm" onclick="openEditProject(
+                {{ project.id }},
+                '{{ project.name|replace("'", "\\'") }}',
+                '{{ (project.description or '')|replace("'", "\\'") }}',
+                '{{ project.status }}',
+                '{{ project.priority }}',
+                '{{ project.deadline or '' }}')">
+                <i class="fa-solid fa-pen"></i> Edit
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="confirmDelete('delete-project-{{ project.id }}')">
+                <i class="fa-solid fa-trash"></i> Delete
+            </button>
+            <form id="delete-project-{{ project.id }}" method="POST"
+                action="{{ url_for('delete_project', project_id=project.id) }}"
+                style="display:none;"></form>
+        </div>
+    </div>
+
+    <div class="project-stats-row">
+        <div class="project-stat">
+            <span class="project-stat-num">{{ project.total_tasks }}</span>
+            <span class="project-stat-label">Total Tasks</span>
+        </div>
+        <div class="project-stat">
+            <span class="project-stat-num">{{ project.completed_tasks }}</span>
+            <span class="project-stat-label">Completed</span>
+        </div>
+        <div class="project-stat">
+            <span class="project-stat-num">{{ project.total_tasks - project.completed_tasks }}</span>
+            <span class="project-stat-label">Remaining</span>
+        </div>
+        {% if project.deadline %}
+        <div class="project-stat">
+            <span class="project-stat-num {% if project.is_overdue %}text-danger{% endif %}">
+                {{ project.deadline.strftime('%b %d') }}
+            </span>
+            <span class="project-stat-label">Deadline</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="project-progress-section">
+        <div class="progress-header">
+            <span>Overall Progress</span>
+            <span>{{ project.progress }}%</span>
+        </div>
+        <div class="progress-bar-wrap large">
+            <div class="progress-bar-fill" style="width: {{ project.progress }}%"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Kanban Board -->
+<div class="kanban-board">
+    {% for col_status, col_icon, col_class in [
+        ('To Do', 'fa-circle-dot', 'todo'),
+        ('In Progress', 'fa-spinner', 'inprogress'),
+        ('Done', 'fa-circle-check', 'done')
+    ] %}
+    <div class="kanban-col">
+        <div class="kanban-col-header kanban-{{ col_class }}">
+            <span><i class="fa-solid {{ col_icon }}"></i> {{ col_status }}</span>
+            <span class="kanban-count">
+                {{ tasks | selectattr('status', 'equalto', col_status) | list | length }}
+            </span>
+        </div>
+        <div class="kanban-cards">
+            {% set col_tasks = tasks | selectattr('status', 'equalto', col_status) | list %}
+            {% if col_tasks %}
+                {% for task in col_tasks %}
+                <div class="kanban-card">
+                    <div class="kanban-card-header">
+                        <span class="kanban-card-title">{{ task.title }}</span>
+                        <div class="kanban-card-actions">
+                            <button class="icon-btn small" title="Edit"
+                                onclick="openEditTask(
+                                    {{ task.id }},
+                                    '{{ task.title|replace("'", "\\'") }}',
+                                    '{{ (task.description or '')|replace("'", "\\'") }}',
+                                    '{{ task.status }}',
+                                    '{{ task.priority }}',
+                                    '{{ task.deadline or '' }}')">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button class="icon-btn small danger" title="Delete"
+                                onclick="confirmDelete('delete-task-{{ task.id }}')">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                            <form id="delete-task-{{ task.id }}" method="POST"
+                                action="{{ url_for('delete_task', task_id=task.id) }}"
+                                style="display:none;">
+                                <input type="hidden" name="ref" value="project">
+                            </form>
+                        </div>
+                    </div>
+
+                    {% if task.description %}
+                    <p class="kanban-card-desc">
+                        {{ task.description[:80] }}{% if task.description|length > 80 %}...{% endif %}
+                    </p>
+                    {% endif %}
+
+                    <div class="kanban-card-footer">
+                        <span class="badge badge-priority-{{ task.priority.lower() }}">{{ task.priority }}</span>
+                        {% if task.deadline %}
+                        <span class="task-deadline">
+                            <i class="fa-solid fa-calendar"></i>
+                            {{ task.deadline.strftime('%b %d') }}
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="status-change-row">
+                        {% for s in ['To Do', 'In Progress', 'Done'] %}
+                            {% if s != task.status %}
+                            <button class="status-btn" onclick="changeTaskStatus({{ task.id }}, '{{ s }}')">
+                                → {{ s }}
+                            </button>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="kanban-empty">
+                    <i class="fa-solid fa-inbox"></i>
+                    <p>No tasks here</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ── NEW TASK MODAL ───────────────────────────────────────── -->
+<div class="modal-overlay" id="newTaskModal"
+    onclick="closeModalOutside(event, 'newTaskModal')">
+    <div class="modal">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-plus"></i> New Task</h3>
+            <button class="modal-close" onclick="closeModal('newTaskModal')">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('new_task', project_id=project.id) }}"
+            class="modal-form">
+            <div class="form-group">
+                <label>Task Title *</label>
+                <input type="text" name="title" placeholder="What needs to be done?" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" placeholder="More details..." rows="3"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status">
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Done">Done</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select name="priority">
+                        <option value="Low">Low</option>
+                        <option value="Medium" selected>Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Deadline</label>
+                <input type="date" name="deadline">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost"
+                    onclick="closeModal('newTaskModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-plus"></i> Add Task
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── EDIT TASK MODAL ─────────────────────────────────────── -->
+<div class="modal-overlay" id="editTaskModal"
+    onclick="closeModalOutside(event, 'editTaskModal')">
+    <div class="modal">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-pen"></i> Edit Task</h3>
+            <button class="modal-close" onclick="closeModal('editTaskModal')">&times;</button>
+        </div>
+        <form method="POST" id="editTaskForm" class="modal-form">
+            <input type="hidden" name="ref" value="project">
+            <div class="form-group">
+                <label>Task Title *</label>
+                <input type="text" name="title" id="editTaskTitle" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" id="editTaskDesc" rows="3"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" id="editTaskStatus">
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Done">Done</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select name="priority" id="editTaskPriority">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Deadline</label>
+                <input type="date" name="deadline" id="editTaskDeadline">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost"
+                    onclick="closeModal('editTaskModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── EDIT PROJECT MODAL ──────────────────────────────────── -->
+<div class="modal-overlay" id="editProjectModal"
+    onclick="closeModalOutside(event, 'editProjectModal')">
+    <div class="modal">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-pen"></i> Edit Project</h3>
+            <button class="modal-close" onclick="closeModal('editProjectModal')">&times;</button>
+        </div>
+        <form method="POST" id="editProjectForm" class="modal-form">
+            <div class="form-group">
+                <label>Project Name *</label>
+                <input type="text" name="name" id="editProjectName" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" id="editProjectDesc" rows="3"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" id="editProjectStatus">
+                        <option value="Active">Active</option>
+                        <option value="On Hold">On Hold</option>
+                        <option value="Completed">Completed</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select name="priority" id="editProjectPriority">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Deadline</label>
+                <input type="date" name="deadline" id="editProjectDeadline">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost"
+                    onclick="closeModal('editProjectModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

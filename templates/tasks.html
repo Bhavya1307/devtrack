@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+{% block title %}All Tasks — DevTrack{% endblock %}
+{% block page_title %}All Tasks{% endblock %}
+
+{% block content %}
+
+<!-- Filters -->
+<div class="filter-bar">
+    <div class="filter-group">
+        <span class="filter-label">Status:</span>
+        {% for s in ['All', 'To Do', 'In Progress', 'Done'] %}
+        <a href="{{ url_for('tasks', status=s, priority=priority_filter) }}"
+           class="filter-btn {% if status_filter == s %}active{% endif %}">{{ s }}</a>
+        {% endfor %}
+    </div>
+    <div class="filter-group">
+        <span class="filter-label">Priority:</span>
+        {% for p in ['All', 'Low', 'Medium', 'High'] %}
+        <a href="{{ url_for('tasks', status=status_filter, priority=p) }}"
+           class="filter-btn {% if priority_filter == p %}active{% endif %}">{{ p }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Tasks Table -->
+{% if tasks %}
+<div class="tasks-table-wrap">
+    <table class="tasks-table">
+        <thead>
+            <tr>
+                <th>Task</th>
+                <th>Project</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Deadline</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in tasks %}
+            <tr>
+                <td>
+                    <div class="task-title-cell">{{ task.title }}</div>
+                    {% if task.description %}
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+                        {{ task.description[:60] }}{% if task.description|length > 60 %}...{% endif %}
+                    </div>
+                    {% endif %}
+                </td>
+
+                <td>
+                    <a href="{{ url_for('project_detail', project_id=task.project.id) }}"
+                       style="color: var(--accent); font-size: 0.85rem;">
+                        <i class="fa-solid fa-folder" style="margin-right: 0.3rem;"></i>
+                        {{ task.project.name }}
+                    </a>
+                </td>
+
+                <td>
+                    {% if task.status == 'To Do' %}
+                        <span class="badge" style="background: rgba(100,116,139,0.2); color: #94a3b8;">
+                            <i class="fa-solid fa-circle-dot" style="margin-right: 0.3rem;"></i>To Do
+                        </span>
+                    {% elif task.status == 'In Progress' %}
+                        <span class="badge badge-on-hold">
+                            <i class="fa-solid fa-spinner" style="margin-right: 0.3rem;"></i>In Progress
+                        </span>
+                    {% else %}
+                        <span class="badge badge-completed">
+                            <i class="fa-solid fa-circle-check" style="margin-right: 0.3rem;"></i>Done
+                        </span>
+                    {% endif %}
+                </td>
+
+                <td>
+                    <span class="badge badge-priority-{{ task.priority.lower() }}">
+                        {{ task.priority }}
+                    </span>
+                </td>
+
+                <td style="font-size: 0.82rem; color: var(--text-muted);">
+                    {% if task.deadline %}
+                        <i class="fa-solid fa-calendar" style="margin-right: 0.3rem;"></i>
+                        {{ task.deadline.strftime('%b %d, %Y') }}
+                    {% else %}
+                        <span style="color: var(--text-muted); opacity: 0.5;">—</span>
+                    {% endif %}
+                </td>
+
+                <td>
+                    <div class="task-actions">
+                        <button class="icon-btn" title="Edit"
+                            onclick="openEditTask(
+                                {{ task.id }},
+                                '{{ task.title|replace("'", "\\'") }}',
+                                '{{ (task.description or '')|replace("'", "\\'") }}',
+                                '{{ task.status }}',
+                                '{{ task.priority }}',
+                                '{{ task.deadline or '' }}')">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button class="icon-btn danger" title="Delete"
+                            onclick="confirmDelete('delete-task-{{ task.id }}')">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                        <form id="delete-task-{{ task.id }}" method="POST"
+                            action="{{ url_for('delete_task', task_id=task.id) }}"
+                            style="display:none;">
+                            <input type="hidden" name="ref" value="tasks">
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% else %}
+<div class="empty-page">
+    <i class="fa-solid fa-list-check"></i>
+    <h3>No tasks found</h3>
+    <p>Go to a project and add some tasks to see them here!</p>
+    <a href="{{ url_for('projects') }}" class="btn btn-primary">
+        <i class="fa-solid fa-folder-open"></i> Go to Projects
+    </a>
+</div>
+{% endif %}
+
+<!-- ── EDIT TASK MODAL ─────────────────────────────────────── -->
+<div class="modal-overlay" id="editTaskModal"
+    onclick="closeModalOutside(event, 'editTaskModal')">
+    <div class="modal">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-pen"></i> Edit Task</h3>
+            <button class="modal-close" onclick="closeModal('editTaskModal')">&times;</button>
+        </div>
+        <form method="POST" id="editTaskForm" class="modal-form">
+            <input type="hidden" name="ref" value="tasks">
+            <div class="form-group">
+                <label>Task Title *</label>
+                <input type="text" name="title" id="editTaskTitle" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" id="editTaskDesc" rows="3"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" id="editTaskStatus">
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Done">Done</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select name="priority" id="editTaskPriority">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Deadline</label>
+                <input type="date" name="deadline" id="editTaskDeadline">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost"
+                    onclick="closeModal('editTaskModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

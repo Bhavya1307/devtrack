@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+{% block title %}Projects — DevTrack{% endblock %}
+{% block page_title %}Projects{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" onclick="openModal('newProjectModal')">
+    <i class="fa-solid fa-plus"></i> New Project
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filters -->
+<div class="filter-bar">
+    <div class="filter-group">
+        <span class="filter-label">Status:</span>
+        {% for s in ['All', 'Active', 'Completed', 'On Hold'] %}
+        <a href="{{ url_for('projects', status=s, priority=priority_filter) }}"
+           class="filter-btn {% if status_filter == s %}active{% endif %}">{{ s }}</a>
+        {% endfor %}
+    </div>
+    <div class="filter-group">
+        <span class="filter-label">Priority:</span>
+        {% for p in ['All', 'Low', 'Medium', 'High'] %}
+        <a href="{{ url_for('projects', status=status_filter, priority=p) }}"
+           class="filter-btn {% if priority_filter == p %}active{% endif %}">{{ p }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Projects Grid -->
+{% if projects %}
+<div class="projects-grid">
+    {% for project in projects %}
+    <div class="project-card {% if project.is_overdue %}overdue{% endif %}">
+        <div class="project-card-header">
+            <div class="project-card-title-row">
+                <h3 class="project-card-title">{{ project.name }}</h3>
+                <div class="project-card-actions">
+                    <button class="icon-btn" onclick="openEditProject({{ project.id }}, '{{ project.name|replace("'", "\\'") }}', '{{ project.description or '' }}', '{{ project.status }}', '{{ project.priority }}', '{{ project.deadline or '' }}')" title="Edit">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="icon-btn danger" onclick="confirmDelete('delete-project-{{ project.id }}')" title="Delete">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                    <form id="delete-project-{{ project.id }}" method="POST" action="{{ url_for('delete_project', project_id=project.id) }}" style="display:none;"></form>
+                </div>
+            </div>
+            <div class="project-card-badges">
+                <span class="badge badge-{{ project.status.lower().replace(' ', '-') }}">{{ project.status }}</span>
+                <span class="badge badge-priority-{{ project.priority.lower() }}">{{ project.priority }}</span>
+                {% if project.is_overdue %}<span class="badge badge-overdue">Overdue</span>{% endif %}
+            </div>
+        </div>
+
+        {% if project.description %}
+        <p class="project-card-desc">{{ project.description[:100] }}{% if project.description|length > 100 %}...{% endif %}</p>
+        {% endif %}
+
+        <div class="project-progress">
+            <div class="progress-header">
+                <span>Progress</span>
+                <span>{{ project.progress }}%</span>
+            </div>
+            <div class="progress-bar-wrap">
+                <div class="progress-bar-fill" style="width: {{ project.progress }}%"></div>
+            </div>
+        </div>
+
+        <div class="project-card-footer">
+            <div class="project-meta-info">
+                <span><i class="fa-solid fa-list-check"></i> {{ project.completed_tasks }}/{{ project.total_tasks }} tasks</span>
+                {% if project.deadline %}
+                <span><i class="fa-solid fa-calendar"></i> {{ project.deadline.strftime('%b %d, %Y') }}</span>
+                {% endif %}
+            </div>
+            <a href="{{ url_for('project_detail', project_id=project.id) }}" class="btn btn-outline btn-sm">
+                View <i class="fa-solid fa-arrow-right"></i>
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-page">
+    <i class="fa-solid fa-folder-open"></i>
+    <h3>No projects found</h3>
+    <p>Create your first project to get started!</p>
+    <button class="btn btn-primary" onclick="openModal('newProjectModal')">
+        <i class="fa-solid fa-plus"></i> Create Project
+    </button>
+</div>
+{% endif %}
+
+<!-- New Project Modal -->
+<div class="modal-overlay" id="newProjectModal" onclick="closeModalOutside(event, 'newProjectModal')">
+    <div class="modal">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-folder-plus"></i> New Project</h3>
+            <button class="modal-close" onclick="closeModal('newProjectModal')">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('new_project') }}" class="modal-form">
+            <div class="form-group">
+                <label>Project Name *</label>
+                <input type="text" name="name" placeholder="My awesome project" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" placeholder="What is this project about?" rows="3"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status">
+                        <option value="Active">Active</option>
+                        <option value="On Hold">On Hold</option>
+                        <option value="Completed">Completed</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select name="priority">
+                        <option value="Low">Low</option>
+                        <option value="Medium" selected>Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Deadline</label>
+                <input type="date" name="deadline">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('newProjectModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Create Project</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Project Modal -->
+<div class="modal-overlay" id="editProjectModal" onclick="closeModalOutside(event, 'editProjectModal')">
+    <div class="modal">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-pen"></i> Edit Project</h3>
+            <button class="modal-close" onclick="closeModal('editProjectModal')">&times;</button>
+        </div>
+        <form method="POST" id="editProjectForm" class="modal-form">
+            <div class="form-group">
+                <label>Project Name *</label>
+                <input type="text" name="name" id="editProjectName" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" id="editProjectDesc" rows="3"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" id="editProjectStatus">
+                        <option value="Active">Active</option>
+                        <option value="On Hold">On Hold</option>
+                        <option value="Completed">Completed</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select name="priority" id="editProjectPriority">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Deadline</label>
+                <input type="date" name="deadline" id="editProjectDeadline">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('editProjectModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
