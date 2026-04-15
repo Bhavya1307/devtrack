@@ -8,7 +8,12 @@ import os
 app = Flask(__name__)
 import os
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'devtrack-secret-key-2024')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///devtrack.db'
+import os
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///devtrack.db')
+# Fix for Render PostgreSQL URL format
+if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
